@@ -1,0 +1,432 @@
+{
+  "name": "desk-workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "events": [
+          "Ticket_Add"
+        ],
+        "options": {}
+      },
+      "id": "450aa218-40b8-4e1f-8cfc-0d95c0792fb7",
+      "name": "Zoho Desk Trigger",
+      "type": "@mohanvadivel/n8n-nodes-zoho-desk.zohoDeskTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "zohoDeskOAuth2Api": {
+          "id": null,
+          "name": "Zoho Desk account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://desk.zoho.com/api/v1/tickets/{{ $json.payload.id }}/latestThread",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zohoDeskOAuth2Api",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "value": "YOUR_ORG_ID",
+              "name": "orgId"
+            }
+          ]
+        }
+      },
+      "id": "cf3a039a-fb38-47eb-9ff0-98436ee5d045",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        0
+      ],
+      "credentials": {
+        "zohoDeskOAuth2Api": {
+          "id": null,
+          "name": "Zoho Desk account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const trig = $('Zoho Desk Trigger').item.json;\nconst src = trig.payload || trig.body?.payload || trig;\nconst thread = $json;\n\nconst names = new Set();\nconst walk = (o, k = '') => {\n  if (o && typeof o === 'object') {\n    for (const [key, v] of Object.entries(o)) walk(v, key);\n  } else if (typeof o === 'string' && /^(first|last|full|display|contact|customer)?_?name$/i.test(k)) {\n    o.split(/\\s+/).forEach((p) => p.length > 1 && names.add(p));\n    if (o.length > 1) names.add(o);\n  }\n};\nwalk(trig);\n\nconst esc = (s) => s.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\nconst sorted = [...names].sort((a, b) => b.length - a.length);\n\nconst mask = (s) => {\n  if (!s) return s;\n  let out = String(s)\n    .replace(/[\\w.+-]+@[\\w-]+\\.[\\w.-]+/g, '[EMAIL]');\n  for (const n of sorted) {\n    out = out.replace(new RegExp(esc(n), 'gi'), '[NAME]');\n  }\n  return out\n    .replace(/https?:\\/\\/\\S+/g, '[URL]')\n    .replace(/\\b\\d{1,3}(?:\\.\\d{1,3}){3}\\b/g, '[IP]')\n    .replace(/\\b\\d{3}-\\d{2}-\\d{4}\\b/g, '[SSN]')\n    .replace(/\\b(?:\\d[ -]?){13,16}\\b/g, '[CARD]')\n    .replace(/\\+?\\d[\\d\\s().-]{7,}\\d/g, '[PHONE]')\n    .replace(/\\b\\d{1,2}[\\/.-]\\d{1,2}[\\/.-]\\d{2,4}\\b/g, '[DATE]')\n    .replace(/\\b\\d{5,}\\b/g, '[NUMBER]')\n    .replace(/\\b\\d{1,5}\\s+[A-Za-z0-9.\\s]{2,30}\\s(?:Street|St|Road|Rd|Avenue|Ave|Lane|Ln|Drive|Dr|Blvd)\\b/gi, '[ADDRESS]');\n};\n\nreturn {\n  json: {\n    ticketId: src.id,\n    subject: mask(src.subject),\n   description: mask(thread.content || thread.summary || src.description || src.contact?.description)\n  }\n};"
+      },
+      "id": "64b7a9cc-8569-4b60-abe8-15787d6772fd",
+      "name": "Code in JavaScript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "inputText": "={{ $json.subject }} {{ $json.description }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.sentimentAnalysis",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        0
+      ],
+      "id": "0cfc1d11-f245-46ab-9a3b-bf989f3d849e",
+      "name": "Sentiment Analysis"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        608,
+        208
+      ],
+      "id": "eb111226-814e-43be-aa78-49f6562d55ee",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "e95af27d-21d9-44b2-b6de-5643ba0a60c2",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1392,
+        192
+      ],
+      "id": "4f1b9cf2-c66f-4f8e-babe-200480f770fd",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Classify this support ticket. Return JSON only.\nKeys: category, priority, tags (array).\nPriority: Low, Medium, High, Urgent.\n\nSubject: {{ $('Code in JavaScript').first().json.subject }}\nBody: {{ $('Code in JavaScript').first().json.description }}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1376,
+        -16
+      ],
+      "id": "841162fc-0eb6-490e-a627-c95d7f6b96c7",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://desk.zoho.com/api/v1/tickets/{{ $json.ticketId }}/associateTag",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zohoDeskOAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "orgId",
+              "value": "YOUR_ORG_ID"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"tags\": {{ JSON.stringify($json.tags) }} }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1968,
+        -96
+      ],
+      "id": "abf084ac-e4cd-453d-8393-0a652f88720d",
+      "name": "HTTP Request1",
+      "credentials": {
+        "zohoDeskOAuth2Api": {
+          "id": null,
+          "name": "Zoho Desk account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://desk.zoho.com/api/v1/tickets/{{ $('Build update').first().json.ticketId }}/comments",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zohoDeskOAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "orgId",
+              "value": "YOUR_ORG_ID"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"content\": {{ JSON.stringify($('Build update').first().json.note) }}, \"isPublic\": false }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2192,
+        -16
+      ],
+      "id": "3fc6b7f3-4542-4310-ab58-63e07aa53ef4",
+      "name": "HTTP Request2",
+      "credentials": {
+        "zohoDeskOAuth2Api": {
+          "id": null,
+          "name": "Zoho Desk account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const s = $('Code in JavaScript').first().json;\nconst tone = $('Merge').first().json.sentimentAnalysis?.category || 'Neutral';\nconst raw = $json.text || $json.output || '';\nconst r = JSON.parse(raw.replace(/```json|```/g, '').trim());\nconst order = ['Low', 'Medium', 'High', 'Urgent'];\nlet priority = r.priority;\nif (tone === 'Negative') priority = order[Math.min(order.indexOf(priority) + 1, 3)];\nconst tags = [...new Set([...(r.tags || []), r.category, `tone-${tone}`].filter(Boolean))]\n  .map((t) => String(t).toLowerCase().replace(/\\s+/g, '-'));\nreturn { json: {\n  ticketId: s.ticketId, tone, priority, tags,\n  note: `Customer tone: ${tone}\\nCategory: ${r.category}\\nPriority: ${priority}`\n} };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1744,
+        -16
+      ],
+      "id": "8c2ad501-1d4c-4e9c-b2fd-5ea5d7cd8ee1",
+      "name": "Build update"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://desk.zoho.com/api/v1/tickets/{{ $('Build update').first().json.ticketId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zohoDeskOAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "orgId",
+              "value": "YOUR_ORG_ID"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"priority\": \"{{ $('Build update').first().json.priority }}\" }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2048,
+        240
+      ],
+      "id": "5e8a36e8-ae8e-4d36-92bf-2fc0acd9cf3f",
+      "name": "HTTP Request3",
+      "credentials": {
+        "zohoDeskOAuth2Api": {
+          "id": null,
+          "name": "Zoho Desk account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Zoho Desk Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Sentiment Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Sentiment Analysis",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sentiment Analysis": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Build update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build update": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "tags": []
+}
