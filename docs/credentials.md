@@ -12,10 +12,6 @@ Zoho data centers use region-specific OAuth and API hosts. Select the data cente
 
 Use the organization ID for the same Zoho Desk account authenticated by the OAuth credential. The workflow sends it in an `orgId` HTTP header on all four HTTP Request nodes. Replace each `YOUR_ORG_ID` placeholder with the account's organization ID.
 
-> Screenshot placeholder: Zoho Desk organization details showing the organization ID.
-
-If the interface location differs, consult the current Zoho Desk account/organization details. Keep the organization ID private to your deployment and verify it matches the OAuth account.
-
 ## OpenAI
 
 Create an OpenAI credential in n8n and assign it to both OpenAI Chat Model and OpenAI Chat Model1. The source workflow's credential entries are placeholders and do not contain an API key. The selected model value is `gpt-5-mini`.
